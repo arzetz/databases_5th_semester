@@ -8,15 +8,15 @@ begin
 	from sale s
 	loop
 			update sale
-			set realtor_commission = 2
+			set realtor_commission = sale_price * 0.02
 			where sale_price < 1000000;
 
 			update sale
-			set realtor_commission = 1.9
+			set realtor_commission = sale_price * 0.019
 			where sale_price > 1000000 and sale_price < 3000000;
 
 			update sale
-			set realtor_commission = 1.7
+			set realtor_commission = sale_price * 0.017
 			where sale_price > 3000000;
 
 	end loop;
