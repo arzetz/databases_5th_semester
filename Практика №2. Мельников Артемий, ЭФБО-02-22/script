@@ -1,0 +1,71 @@
+Script
+
+create table workday(
+	employee_id integer,
+	schedule timestamp,
+	employee_status integer
+);
+
+insert into workday (employee_id, schedule, employee_status)
+values 
+(101,' 2023-10-14 09:10:00', 1),
+(102,' 2023-10-14 08:57:00', 1),
+(103,' 2023-10-14 09:15:00', 1),
+(101,' 2023-10-14 13:05:00', 2),
+(102,' 2023-10-14 13:15:00', 2),
+(103,' 2023-10-14 13:15:00', 2),
+(101,' 2023-10-14 13:50:00', 1),
+(102,' 2023-10-14 13:50:00', 1),
+(103,' 2023-10-14 13:50:00', 1),
+(101,' 2023-10-14 18:40:00', 2),
+(102,' 2023-10-14 18:10:00', 2),
+(103,' 2023-10-14 18:05:00', 2)
+
+select * from workday
+
+update workday
+set employee_status = 1 where schedule = ' 2023-10-10 13:50:00'
+
+CREATE OR REPLACE FUNCTION worktime()
+RETURNS TABLE(emp_id INT, total_worktime TEXT) AS $$
+DECLARE
+    total_worktime_interval INTERVAL;
+    last_entry TIMESTAMP;
+    current_employee_id INT;
+record RECORD;
+BEGIN
+    FOR current_employee_id IN  -- цикл по уникальным сотрудникам
+        SELECT DISTINCT wd.employee_id
+        FROM workday wd
+    LOOP
+        total_worktime_interval := '0 hours'; -- сброс для каждого сотрудника
+        last_entry := NULL; -- сброс для каждого сотрудника
+        FOR record IN -- внутренний цикл по записям для конкретного сотрудника
+            SELECT wd.schedule, wd.employee_status
+            FROM workday wd
+            WHERE wd.employee_id = current_employee_id
+            ORDER BY wd.schedule
+        LOOP
+            IF record.employee_status = 1 THEN --проверяем статус 1 вход, 2 выход
+                last_entry := record.schedule;
+            ELSIF record.employee_status = 2 AND last_entry IS NOT NULL THEN
+                total_worktime_interval := total_worktime_interval + (record.schedule - last_entry);
+                last_entry := NULL; -- сброс
+            END IF;
+        END LOOP;
+
+        IF total_worktime_interval < INTERVAL '40 hours' THEN
+            RETURN QUERY SELECT current_employee_id, total_worktime_interval::TEXT || ' (Меньше нормы)';
+        ELSIF total_worktime_interval = INTERVAL '40 hours' THEN
+            RETURN QUERY SELECT current_employee_id, total_worktime_interval::TEXT || ' (Норма)';
+        ELSE
+            RETURN QUERY SELECT current_employee_id, total_worktime_interval::TEXT || ' (Больше нормы)';
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+select * from worktime();
+
+DROP FUNCTION worktime()
+
