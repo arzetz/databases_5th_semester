@@ -65,7 +65,55 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+CREATE OR REPLACE FUNCTION calculate_salary()
+RETURNS TABLE(emp_id INT, salary TEXT) AS $$
+DECLARE
+    base_salary INT := 50000;  -- Базовый оклад
+    total_delay_minutes INT;
+    delay_factor NUMERIC := 1;  -- Коэффициент A
+    last_entry TIMESTAMP;
+    total_worktime INTERVAL;
+	inner_record RECORD;
+    record RECORD;
+BEGIN
+    FOR record IN
+        SELECT DISTINCT wd.employee_id
+        FROM workday wd
+    LOOP
+        total_delay_minutes := 0;
+        last_entry := NULL;
+        
+        FOR inner_record IN
+            SELECT wd.schedule, wd.employee_status
+            FROM workday wd
+            WHERE wd.employee_id = record.employee_id
+            ORDER BY wd.schedule
+        LOOP
+            IF inner_record.employee_status = 1 THEN  -- Время входа
+                last_entry := inner_record.schedule;
+            ELSIF inner_record.employee_status = 2 AND last_entry IS NOT NULL THEN  -- Время выхода
+                total_worktime := inner_record.schedule - last_entry;
+                IF inner_record.schedule > last_entry THEN
+                    total_delay_minutes := total_delay_minutes + EXTRACT(MINUTE FROM total_worktime);
+                END IF;
+                last_entry := NULL;
+            END IF;
+        END LOOP;
+        delay_factor := 1 - (total_delay_minutes / 10 * 0.05);  -- Уменьшаем A на 0.05 за каждые 10 минут опоздания
+        IF delay_factor < 0 THEN
+            delay_factor := 0;
+        END IF;
+
+        RETURN QUERY
+        SELECT record.employee_id, 
+            (base_salary + base_salary * delay_factor);
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT * FROM calculate_salary();
+
 select * from worktime();
 
 DROP FUNCTION worktime()
-
